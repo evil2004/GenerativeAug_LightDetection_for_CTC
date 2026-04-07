@@ -1,0 +1,81 @@
+# ================================================================
+# DSG-GAN: Diffusion Score-Guided GAN
+# 任务: 无条件生成 CTC 细胞图像
+# 输入: z ~ N(0,1)  →  输出: 全新 CTC 图像
+# ================================================================
+
+paths:
+  dataset_dir:    "CTC"                      # relative to project root
+  output_dir:     "output"                   # relative to project root
+  ddpm_ckpt:      "output/ddpm_teacher.pth"  # relative to project root
+
+# ── 第一阶段：DDPM 教师预训练 ────────────────────────────────
+ddpm:
+  epochs:         300          # DDPM 预训练轮数
+  batch_size:     8
+  lr:             0.0002
+  T:              1000         # 扩散时间步总数
+  beta_start:     0.0001
+  beta_end:       0.02
+  img_size:       128
+  base_ch:        64           # U-Net 基础通道（轻量 ~4M 参数）
+  time_emb_dim:   128
+
+# ── 第二阶段：DSG-GAN 训练 ──────────────────────────────────
+training:
+  n_folds:        10
+  epochs:         300          # 每折 GAN 训练轮数
+  batch_size:     16
+  lr_g:           0.0002
+  lr_d:           0.00012
+  beta1:          0.0
+  beta2:          0.99
+  r1_gamma:       5.0
+  r1_every:       32
+  ema_decay:      0.9995
+  seed:           42
+  save_interval:  50
+  val_interval:   10
+  num_workers:    4
+  n_vis:          16           # 可视化固定采样数
+
+model:
+  img_size:       128
+  z_dim:          128
+  w_dim:          256
+  map_layers:     4
+  ngf:            64
+  ndf:            64
+
+# ── C1: MGSM 多粒度分数匹配 ──────────────────────────────────
+mgsm:
+  t_low:          50           # 低噪声时间步（精细纹理）
+  t_mid:          300          # 中噪声时间步（结构+纹理）
+  t_high:         700          # 高噪声时间步（全局形态）
+  weight_lr:      0.0005       # 动态权重 MLP 学习率
+
+# ── C2: DFA-G 扩散特征对齐 ───────────────────────────────────
+dfa:
+  align_resolutions: [16, 32]  # 对齐的特征分辨率
+  lambda_align:   2.0          # 特征对齐损失权重
+  t_align_start:  600          # 对齐用的初始噪声水平（课程式降低）
+  t_align_end:    200
+
+# ── C3: ANL-D 自适应噪声水平判别器 ───────────────────────────
+anl:
+  n_noise_levels: 2            # 判别器同时看的噪声水平数
+  t_max_start:    400          # 训练初期最大噪声水平
+  t_max_end:      100          # 训练末期最大噪声水平（课程降低）
+
+loss:
+  lambda_adv:     1.0
+  lambda_mgsm:    1.0          # C1 权重
+  lambda_align:   2.0          # C2 权重
+  lambda_r1:      5.0
+  lambda_fm:      3.0
+  lambda_color:   2.0          # 颜色先验约束（蓝色主导）
+  lambda_shape:   1.0          # 形态先验约束（面积+椭圆偏心率）
+
+metrics:
+  compute_fid:    true
+  compute_is:     true
