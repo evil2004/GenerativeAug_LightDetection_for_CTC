@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CTC/CEC 检测面板</title>
+  <style>
+    :root {
+      --bg:#f5f7fb;
+      --panel:#ffffff;
+      --muted:#5c6b84;
+      --text:#0f172a;
+      --accent:#2563eb;
+      --danger:#e11d48;
+      --ok:#16a34a;
+      --border: rgba(15,23,42,.12);
+      --shadow: 0 10px 30px rgba(15,23,42,.06);
+    }
+    html, body {
+      height: 100%;
+    }
+    body {
+      margin:0;
+      font-family: "Microsoft YaHei UI","Microsoft YaHei",system-ui,Segoe UI,Roboto,Helvetica,Arial;
+      background:var(--bg);
+      color:var(--text);
+      overflow-y: auto; /* 允许整个页面滚动 */
+    }
+    .app { display:flex; flex-direction:column; min-height:100vh; }
+    .top { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:12px; align-items:center; background:var(--panel); }
+    .title { font-weight:800; letter-spacing:.2px; }
+
+    .grid { display:grid; grid-template-columns: 1fr; gap:12px; padding:12px 16px; }
+    .panel { background:var(--panel); border:1px solid var(--border); box-shadow: var(--shadow); border-radius:12px; padding:12px; }
+
+    label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    input, select {
+      width:100%; box-sizing:border-box; padding:10px 10px;
+      border-radius:10px; border:1px solid var(--border);
+      background:#fff; color:var(--text);
+    }
+    input::placeholder { color: rgba(15,23,42,.45); }
+    input[disabled], select[disabled] { opacity:.6; background: rgba(15,23,42,.03); }
+
+    .row { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; }
+    .btn { padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(37,99,235,.10); color:var(--text); cursor:pointer; white-space: nowrap; }
+    .btn:hover { background:rgba(37,99,235,.16); }
+    .btn.danger { background:rgba(225,29,72,.10); }
+    .btn.danger:hover { background:rgba(225,29,72,.16); }
+
+    .form-grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; align-items:start; }
+    .form-col { display:flex; flex-direction:column; gap:10px; }
+
+    .btnrow3 { display:grid; grid-template-columns: 1fr 1fr; gap:8px; justify-content:end; }
+    .btnrow3 .btn { width:100%; }
+
+    .actionsline { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+    .progresswrap { margin-top:10px; }
+    .bar { width:100%; height:10px; background:rgba(15,23,42,.08); border-radius:999px; overflow:hidden; }
+    .bar > div { height:100%; width:0%; background:var(--accent); transition: width .2s ease; }
+
+    .meta { display:flex; gap:10px; align-items:center; color:var(--muted); font-size:12px; }
+    .pill { padding:6px 12px; font-size: 14px; border:1px solid var(--border); border-radius:999px; background:rgba(15,23,42,.02); }
+    #status_pill { font-weight: bold; }
+    .ok { color:var(--ok); }
+    .dangerText { color:var(--danger); }
+    .small { font-size:12px; color:var(--muted); }
+
+    .content { display:grid; grid-template-columns: 280px 1fr; gap:12px; padding:0 16px 16px; }
+    .left { background:var(--panel); border:1px solid var(--border); box-shadow: var(--shadow); border-radius:12px; overflow:hidden; resize:horizontal; min-width:200px; max-width:45vw; display:flex; flex-direction:column; }
+    .right { background:var(--panel); border:1px solid var(--border); box-shadow: var(--shadow); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+    /* 目录保留内部滚动，但页面也允许滚动 */
+    #file_list { overflow:auto; max-height: 70vh; }
+    /* 图片展示区域也可内部滚动，防止超长时撑爆布局 */
+    #viewer { overflow:auto; max-height: 75vh; }
+    .left h3, .right h3 { margin:0; padding:12px; border-bottom:1px solid var(--border); font-size:13px; color:var(--muted); }
+    .fileitem { padding:10px 12px; border-bottom:1px solid rgba(15,23,42,.06); cursor:pointer; font-size: 13px; }
+    .fileitem:hover { background:rgba(15,23,42,.03); }
+    .fileitem.active { background:rgba(37,99,235,.10); }
+    .viewer { padding:12px; }
+    .viewer-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .viewer img { max-width: 980px; width: 100%; height: auto; object-fit: contain; display:block; margin: 0 auto; border-radius:10px; border:1px solid var(--border); background:#fff; cursor: default; }
+
+    @media (max-width: 1000px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .content { grid-template-columns: 1fr; }
+      .left { max-width: none; resize: none; }
+      .btnrow3 { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="title">CTC/CEC 检测面板</div>
+      <div class="small">项目根目录：{{ project_root }}</div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <!-- 第一行：模式 + 输入 + 输出 -->
+        <div class="form-grid" style="grid-template-columns: 260px 1fr 1fr; align-items:end;">
+            <div>
+              <label>模式</label>
+              <select id="mode">
+                <option value="two_stage">两阶段（normal → goal）</option>
+                <option value="goal_only">仅目标细胞（goal_only）</option>
+                <option value="normal_only">仅普通细胞（normal_only）</option>
+              </select>
+            </div>
+
+            <div>
+              <label>输入（文件 或 文件夹）</label>
+              <div class="row">
+                <input id="input_path" placeholder="选择单张大图(.tif/.tiff) 或 一个文件夹(小图批量)" />
+                <div class="btnrow3">
+                  <button class="btn" id="pick_input_file">打开文件</button>
+                  <button class="btn" id="pick_input_dir">打开文件夹</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label>输出目录</label>
+              <div class="row">
+                <input id="output_dir" value="{{ default_output }}" />
+                <button class="btn" id="pick_output_dir">打开文件夹</button>
+              </div>
+            </div>
+        </div>
+
+        <!-- 第二行：权重 + 各自 conf/iou + 额外参数 -->
+        <div class="form-grid" style="margin-top:12px; grid-template-columns: 1fr 1fr 0.7fr; gap:12px; align-items:stretch;">
+          <!-- normal -->
+          <div class="panel" style="box-shadow:none; padding:10px; display:flex; flex-direction:column;">
+            <div>
+              <label>normal 权重（两阶段才需要）</label>
+              <div class="row">
+                <input id="weights_normal" value="{{ default_weights_normal }}" />
+                <div class="btnrow3">
+                  <button class="btn" id="pick_weights_normal">打开文件</button>
+                  <button class="btn" id="list_weights_normal">默认列表</button>
+                </div>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+              <div>
+                <label>normal conf</label>
+                <input id="stage1_conf" type="number" step="0.01" value="0.25" />
+              </div>
+              <div>
+                <label>normal iou</label>
+                <input id="stage1_iou" type="number" step="0.01" value="0.45" />
+              </div>
+            </div>
+
+          </div>
+
+          <!-- goal -->
+          <div class="panel" style="box-shadow:none; padding:10px; display:flex; flex-direction:column;">
+            <div>
+              <label>goal 权重</label>
+              <div class="row">
+                <input id="weights_goal" value="{{ default_weights_goal }}" />
+                <div class="btnrow3">
+                  <button class="btn" id="pick_weights_goal">打开文件</button>
+                  <button class="btn" id="list_weights_goal">默认列表</button>
+                </div>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+              <div>
+                <label>goal conf</label>
+                <input id="stage2_conf" type="number" step="0.01" value="0.001" />
+              </div>
+              <div>
+                <label>goal iou</label>
+                <input id="stage2_iou" type="number" step="0.01" value="0.45" />
+              </div>
+            </div>
+
+          </div>
+
+          <!-- extra params -->
+          <div class="panel" style="box-shadow:none; padding:10px; display:flex; flex-direction:column;">
+            <div>
+              <label>额外参数</label>
+              <div style="display:grid; grid-template-columns: 1fr; gap:10px; margin-top:10px;">
+                <div>
+                  <label>gpu_batch_size</label>
+                  <input id="batch_size" type="number" step="1" value="16" />
+                </div>
+                <div>
+                  <label>tile_size</label>
+                  <input id="tile_size" type="number" step="1" value="1280" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 开始预测另起一行 -->
+        <div style="margin-top:10px; display:flex; justify-content:start; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div class="actionsline">
+            <label style="display:flex; align-items:center; gap:8px; margin:0; font-size:12px; color:var(--muted);">
+              <input id="clean_output" type="checkbox" style="width:auto;" />
+              <span>开始前清理输出目录</span>
+            </label>
+            <button class="btn" id="start_btn">开始预测</button>
+            <button class="btn danger" id="stop_btn">终止</button>
+            <button class="btn" id="refresh_btn">刷新结果</button>
+            <div class="meta" style="margin-left: 10px;">
+            <span class="pill" id="status_pill">idle</span>
+            <span class="pill" id="elapsed">0.0s</span>
+            <span class="pill" id="eta">ETA --</span>
+            <span class="pill" id="count">0/0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="progresswrap">
+          <div class="bar"><div id="bar_inner"></div></div>
+          <div class="small" id="msg" style="margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="left">
+        <h3>结果目录（可拖动宽度）</h3>
+        <div id="file_list"></div>
+      </div>
+      <div class="right">
+        <h3 style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <span>图片展示</span>
+          <span style="display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px;">
+            <span>缩放</span>
+            <input id="zoom" type="range" min="30" max="200" value="100" style="width:160px;" />
+            <span class="pill" id="zoom_label">100%</span>
+          </span>
+        </h3>
+        <div class="viewer" id="viewer"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const modeEl = document.getElementById('mode');
+  const wNormal = document.getElementById('weights_normal');
+  const wGoal = document.getElementById('weights_goal');
+  const pickWNormal = document.getElementById('pick_weights_normal');
+  const pickWGoal = document.getElementById('pick_weights_goal');
+  const listWNormal = document.getElementById('list_weights_normal');
+  const listWGoal = document.getElementById('list_weights_goal');
+  const stage1ConfEl = document.getElementById('stage1_conf');
+  const stage1IouEl = document.getElementById('stage1_iou');
+  const stage2ConfEl = document.getElementById('stage2_conf');
+  const stage2IouEl = document.getElementById('stage2_iou');
+  const statusPill = document.getElementById('status_pill');
+  const elapsedEl = document.getElementById('elapsed');
+  const etaEl = document.getElementById('eta');
+  const countEl = document.getElementById('count');
+  const barInner = document.getElementById('bar_inner');
+  const msgEl = document.getElementById('msg');
+  const fileListEl = document.getElementById('file_list');
+  const viewerEl = document.getElementById('viewer');
+  const zoomEl = document.getElementById('zoom');
+  const zoomLabelEl = document.getElementById('zoom_label');
+
+  const defaultGoalWeights = {
+    two_stage: "{{ default_weights_goal_two_stage }}",
+    goal_only: "{{ default_weights_goal_only }}",
+  };
+  // NOTE: 前端不再缓存“默认目录”，只在点击“默认列表”时向后端请求权重列表
+  // const defaultWeightDirs = {...} 已废弃
+
+
+  let zoomPercent = 100;
+  function applyZoom() {
+    zoomLabelEl.textContent = zoomPercent + '%';
+    const img = viewerEl.querySelector('img');
+    if (img) {
+      img.style.width = zoomPercent + '%';
+      img.style.maxWidth = 'none';
+    }
+  }
+
+  zoomEl.addEventListener('input', () => {
+    zoomPercent = parseInt(zoomEl.value || '100', 10);
+    applyZoom();
+  });
+
+  function setModeUI() {
+    const m = modeEl.value;
+    const isGoalOnly = (m === 'goal_only');
+    const isNormalOnly = (m === 'normal_only');
+
+    // goal_only/normal_only 时：不需要 normal 权重与 normal 阈值
+    const disableNormal = isGoalOnly;
+    wNormal.disabled = disableNormal;
+    pickWNormal.disabled = disableNormal;
+    pickWNormal.style.opacity = disableNormal ? 0.6 : 1;
+    stage1ConfEl.disabled = disableNormal;
+    stage1IouEl.disabled = disableNormal;
+
+    // normal_only 时：不需要 goal 权重，也不需要 goal conf/iou
+    wGoal.disabled = isNormalOnly;
+    pickWGoal.disabled = isNormalOnly;
+    listWGoal.disabled = isNormalOnly;
+    stage2ConfEl.disabled = isNormalOnly;
+    stage2IouEl.disabled = isNormalOnly;
+
+    // goal_only/two_stage 时：允许调整 goal conf/iou
+    if (!isNormalOnly) {
+      stage2ConfEl.disabled = false;
+      stage2IouEl.disabled = false;
+    }
+
+    // 根据模式自动切换 goal 默认权重（若当前为空或仍为另一默认值）
+    if (!isNormalOnly) {
+      const cur = (wGoal.value || '').trim();
+      const target = defaultGoalWeights[isGoalOnly ? 'goal_only' : 'two_stage'] || '';
+      const other = defaultGoalWeights[isGoalOnly ? 'two_stage' : 'goal_only'] || '';
+      if (!cur || cur === other) {
+        wGoal.value = target;
+      }
+    }
+  }
+  modeEl.addEventListener('change', setModeUI);
+  setModeUI();
+
+  async function postJSON(url, body) {
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || '请求失败');
+    return j;
+  }
+
+  async function getJSON(url) {
+    const r = await fetch(url);
+    return await r.json();
+  }
+
+  function setActiveItem(name) {
+    for (const el of document.querySelectorAll('.fileitem')) {
+      el.classList.toggle('active', el.dataset.name === name);
+    }
+  }
+
+  function showImageSingle(url) {
+    viewerEl.innerHTML = `<div><img src="${url}" /></div>`;
+    applyZoom();
+  }
+
+  function showTwoStagePair(selectedName, itemsByName) {
+    const isRemoved = selectedName.includes('goal_from_removed');
+    const isOnly = selectedName.includes('goal_from_only');
+
+    let removed = null;
+    let only = null;
+
+    if (isRemoved) {
+      removed = itemsByName.get(selectedName);
+      const counterpart = selectedName.replace('goal_from_removed', 'goal_from_only');
+      only = itemsByName.get(counterpart) || null;
+    } else if (isOnly) {
+      only = itemsByName.get(selectedName);
+      const counterpart = selectedName.replace('goal_from_only', 'goal_from_removed');
+      removed = itemsByName.get(counterpart) || null;
+    }
+
+    const left = removed ? `<div><div class="small" style="margin-bottom:6px;">normal_removed</div><img src="${removed.url}" /></div>` : `<div class="small">未找到 removed 对应图</div>`;
+    const right = only ? `<div><div class="small" style="margin-bottom:6px;">normal_only</div><img src="${only.url}" /></div>` : `<div class="small">未找到 only 对应图</div>`;
+
+    viewerEl.innerHTML = `<div class="viewer-grid">${left}${right}</div>`;
+  }
+
+  async function refreshResults() {
+    const res = await getJSON('/api/results');
+    const items = res.items || [];
+
+    fileListEl.innerHTML = '';
+
+    const itemsByName = new Map();
+    for (const it of items) itemsByName.set(it.name, it);
+
+    for (const it of items) {
+      const div = document.createElement('div');
+      div.className = 'fileitem';
+      div.textContent = it.name;
+      div.dataset.name = it.name;
+      div.onclick = () => {
+        setActiveItem(it.name);
+        if (it.name.includes('stage2/goal_from_removed') || it.name.includes('stage2/goal_from_only')) {
+          showTwoStagePair(it.name, itemsByName);
+        } else {
+          showImageSingle(it.url);
+        }
+      };
+      fileListEl.appendChild(div);
+    }
+
+    msgEl.textContent = items.length > 0 ? `找到 ${items.length} 张结果图` : '当前输出目录下没有找到结果图';
+  }
+
+  document.getElementById('refresh_btn').addEventListener('click', refreshResults);
+
+  document.getElementById('start_btn').addEventListener('click', async () => {
+    msgEl.textContent = '';
+    msgEl.className = 'small';
+    try {
+      // 默认输出目录：点击开始预测时按当前时间生成一个 outputs/时间戳 的相对路径
+      const outEl = document.getElementById('output_dir');
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const ts = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      // 如果当前 output_dir 是 outputs 下的时间戳格式，或为空，则自动更新为最新时间戳
+      const curOut = (outEl.value || '').trim();
+      if (!curOut || /(^|[\\\/])outputs[\\\/]\d{4}-\d{2}-\d{2}-\d{6}$/.test(curOut)) {
+        // 使用相对路径，让后端自动拼接 project_root
+        outEl.value = `outputs\\${ts}`;
+      }
+
+      const goalConf = parseFloat(stage2ConfEl.value);
+      const goalIou = parseFloat(stage2IouEl.value);
+      const cleanOutput = !!document.getElementById('clean_output')?.checked;
+      const batchSizeEl = document.getElementById('batch_size'); // gpu_batch_size
+      const tileSizeEl = document.getElementById('tile_size');
+
+      let batchSize = parseInt((batchSizeEl?.value || '16'), 10);
+      let tileSize = parseInt((tileSizeEl?.value || '1280'), 10);
+      if (!Number.isFinite(batchSize) || batchSize < 1) batchSize = 16;
+      if (!Number.isFinite(tileSize) || tileSize < 1) tileSize = 1280;
+
+      await postJSON('/api/start', {
+        mode: modeEl.value,
+        clean_output: cleanOutput,
+        // 为保持后端兼容：conf/iou 与 stage2_conf/stage2_iou 使用同一套值
+        conf: goalConf,
+        iou: goalIou,
+        stage1_conf: parseFloat(stage1ConfEl.value),
+        stage1_iou: parseFloat(stage1IouEl.value),
+        stage2_conf: goalConf,
+        stage2_iou: goalIou,
+        // streaming 可选参数（后端有默认值，不填也能跑）
+        batch_size: batchSize, // gpu_batch_size（仅GPU时生效）
+        device: '0',
+        half: true,
+        tile_size: tileSize,
+        overlap: 0,
+        tile_workers: 10,
+        pairs_gap: 60,
+        weights_normal: wNormal.value,
+        weights_goal: document.getElementById('weights_goal').value,
+        input_path: document.getElementById('input_path').value,
+        output_dir: outEl.value,
+      });
+    } catch (e) {
+      msgEl.textContent = e.message;
+      msgEl.className = 'small dangerText';
+    }
+  });
+
+  document.getElementById('stop_btn').addEventListener('click', async () => {
+    await fetch('/api/stop', {method:'POST'});
+  });
+
+  async function pickFile(kind) {
+    const res = await getJSON('/api/pick_file?kind=' + encodeURIComponent(kind));
+    if (res.ok) return res.path;
+    return null;
+  }
+  async function pickDir(kind) {
+    const res = await getJSON('/api/pick_dir?kind=' + encodeURIComponent(kind));
+    if (res.ok) return res.path;
+    return null;
+  }
+
+  document.getElementById('pick_input_file').addEventListener('click', async () => {
+    const p = await pickFile('input');
+    if (p) document.getElementById('input_path').value = p;
+  });
+  document.getElementById('pick_input_dir').addEventListener('click', async () => {
+    const p = await pickDir('input');
+    if (p) document.getElementById('input_path').value = p;
+  });
+
+  document.getElementById('pick_output_dir').addEventListener('click', async () => {
+    const p = await pickDir('output');
+    if (p) document.getElementById('output_dir').value = p;
+  });
+
+  document.getElementById('pick_weights_normal').addEventListener('click', async () => {
+    const p = await pickFile('weights_normal');
+    if (p) wNormal.value = p;
+  });
+  document.getElementById('pick_weights_goal').addEventListener('click', async () => {
+    const p = await pickFile('weights_goal');
+    if (p) wGoal.value = p;
+  });
+
+  async function chooseWeight(kind, targetInput, title) {
+    const res = await getJSON('/api/list_weights?kind=' + encodeURIComponent(kind));
+    const items = res.items || [];
+    if (!items.length) {
+      msgEl.textContent = '默认权重目录下没有找到 .pt 文件';
+      return;
+    }
+
+    // 按文件名排序（更稳定）
+    items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-CN'));
+
+    const lines = items.map((it, idx) => `${idx + 1}. ${it.name}  (${it.path})`);
+    const tip = `请选择 ${title}（输入序号）：\n` + lines.join('\n');
+    const ans = prompt(tip, '1');
+    if (ans == null) return;
+    const n = parseInt(ans, 10);
+    if (!Number.isFinite(n) || n < 1 || n > items.length) {
+      msgEl.textContent = '输入无效';
+      msgEl.className = 'small dangerText';
+      return;
+    }
+    targetInput.value = items[n - 1].path;
+  }
+
+  document.getElementById('list_weights_normal').addEventListener('click', async () => {
+    // normal_only / two_stage 才需要 normal 权重
+    await chooseWeight('weights_normal', wNormal, 'normal 权重');
+  });
+
+  document.getElementById('list_weights_goal').addEventListener('click', async () => {
+    // normal_only 不需要 goal 权重
+    if (modeEl.value === 'normal_only') {
+      msgEl.textContent = 'normal_only 模式不需要 goal 权重';
+      return;
+    }
+    await chooseWeight('weights_goal', wGoal, 'goal 权重');
+  });
+
+  function fmtSec(sec) {
+    if (sec == null) return '--';
+    const s0 = Number(sec);
+    if (!Number.isFinite(s0) || s0 < 0) return '--';
+    const m = Math.floor(s0 / 60);
+    const s = Math.floor(s0 % 60);
+    if (m <= 0) return `${s}s`;
+    return `${m}m${String(s).padStart(2, '0')}s`;
+  }
+
+  function setStatus(evt) {
+    const st = evt.status || 'running';
+    const stage = evt.stage || '';
+    const msg = evt.message || '';
+    const progress = (evt.progress != null) ? evt.progress : null;
+    const elapsed = evt.elapsed != null ? evt.elapsed : null;
+    const eta = evt.eta != null ? evt.eta : null;
+
+    statusPill.textContent = st;
+    statusPill.className = 'pill ' + (st === 'done' ? 'ok' : (st === 'error' ? 'dangerText' : ''));
+
+    if (elapsed != null) elapsedEl.textContent = fmtSec(elapsed);
+    if (eta != null) etaEl.textContent = 'ETA ' + fmtSec(eta);
+
+    if (progress != null) {
+      barInner.style.width = Math.max(0, Math.min(100, progress)) + '%';
+    }
+
+    // 显示已处理/总数（如果有）
+    const cur = evt.current != null ? evt.current : null;
+    const tot = evt.total != null ? evt.total : null;
+    if (cur != null && tot != null && Number.isFinite(cur) && Number.isFinite(tot) && tot > 0) {
+      countEl.textContent = `${cur}/${tot}`;
+    } else {
+      countEl.textContent = '0/0';
+    }
+
+    msgEl.textContent = `[${stage}] ${msg}`;
+  }
+
+  const es = new EventSource('/api/stream');
+  es.onmessage = (ev) => {
+    try {
+      const evt = JSON.parse(ev.data);
+      setStatus(evt);
+      if (evt.status === 'done') {
+        refreshResults();
+      }
+    } catch (e) {}
+  };
+
+  // 初次加载
+  refreshResults();
+</script>
+</body>
+</html>

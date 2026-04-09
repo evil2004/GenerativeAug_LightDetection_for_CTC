@@ -1,0 +1,9 @@
+flask
+numpy
+opencv-python-headless
+Pillow
+rasterio
+tifffile
+torch
+ultralytics
+send2trash
