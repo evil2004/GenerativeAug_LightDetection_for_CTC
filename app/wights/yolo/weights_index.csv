@@ -1,0 +1,4 @@
+﻿"rank","tag","test_mAP50","test_R","val_mAP50","pt","onnx"
+"1","20260422_002637","0.981","0.9738","0.9161","E:\app\wights\yolo\01_map981_R974_20260422_002637_best.pt","E:\app\wights\yolo\01_map981_R974_20260422_002637_best.onnx"
+"2","20260422_163646","0.9227","0.8939","0.815","E:\app\wights\yolo\02_map923_R894_20260422_163646_best.pt","E:\app\wights\yolo\02_map923_R894_20260422_163646_best.onnx"
+"3","20260422_143619","0.8382","0.7652","0.8192","E:\app\wights\yolo\03_map838_R765_20260422_143619_best.pt","E:\app\wights\yolo\03_map838_R765_20260422_143619_best.onnx"
